@@ -73,6 +73,58 @@ function email.get_inbox(name)
 	return email.inboxes[name] or {}
 end
 
+-- MAIL TO ALL PLAYERS
+
+minetest.register_privilege("mailall", {
+	description = "Can send mail to all players at once with /mailall",
+	give_to_singleplayer = false
+})
+
+minetest.register_chatcommand("mailall", {
+	privs = {
+		mailall = true
+	},
+	func = function(name, param)
+		local mail = {
+			date = os.date("%Y-%m-%d %H:%M:%S"),
+			from = name,
+			msg = param,
+			is_mail_all = true
+		}
+
+		if email.mail_all then
+			table.insert(email.mail_all, mail)
+		else
+			email.mail_all = { mail }
+		end
+
+		email.save()
+
+		return true, "Sent mail \n\"" .. param .. "\"\n to all players!"
+	end
+})
+
+function email.get_full_inbox(name) -- Different function so that the popup and message on login don't remain if their inbox only contains these undeletable messages
+	if email.mail_all then
+		if email.inboxes[name] then
+			new_inbox = email.inboxes[name] 
+		else
+			new_inbox = {}
+		end
+
+		for _, message in ipairs(email.mail_all) do
+			table.insert(new_inbox, message)
+		end
+		return new_inbox or {}
+	else
+		return email.inboxes[name] or {}
+	end
+end
+
+-- END OF MAIL TO ALL PLAYERS
+
+
+
 function email.clear_inbox(name)
 	email.inboxes[name] = nil
 	email.save()
@@ -90,7 +142,7 @@ minetest.register_on_joinplayer(function(player)
 end)
 
 function email.get_formspec(name)
-	local inbox = email.get_inbox(name)
+	local inbox = email.get_full_inbox(name)
 
 	local function row(fs, c1, date, from, msg)
 		date = minetest.formspec_escape(date)
@@ -132,7 +184,7 @@ end
 
 function email.show_inbox(name, text_mode)
 	if text_mode then
-		local inbox = email.get_inbox(name)
+		local inbox = email.get_full_inbox(name)
 		if #inbox == 0 then
 			return true, S("Your inbox is empty!")
 		else
