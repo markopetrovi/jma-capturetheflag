@@ -8,12 +8,18 @@ function ctf_map.announce_map(map)
 end
 
 function ctf_map.place_map(mapmeta, callback)
-	local dirname = mapmeta.dirname
-	local schempath = ctf_map.maps_dir .. dirname .. "/map.mts"
-
 	ctf_map.emerge_with_callbacks(nil, mapmeta.pos1, mapmeta.pos2, function(ctx)
-		local rotation = (mapmeta.rotation and mapmeta.rotation ~= "z") and "90" or "0"
-		local res = minetest.place_schematic(mapmeta.pos1, schempath, rotation, {["ctf_map:chest"] = "air"})
+		local dirname = mapmeta.dirname
+
+		if mapmeta.scripted_map_mode then
+			mapmeta.script.on_placemap(mapmeta)
+		else
+			local schempath = ctf_map.maps_dir .. dirname .. "/map.mts"
+			local rotation = (mapmeta.rotation and mapmeta.rotation ~= "z") and "90" or "0"
+			local res = minetest.place_schematic(mapmeta.pos1, schempath, rotation, {["ctf_map:chest"] = "air"})
+
+			assert(res, "Unable to place schematic, does the MTS file exist? Path: " .. schempath)
+		end
 
 		minetest.log("action", string.format(
 			"Placed map %s in %.2fs", dirname, (minetest.get_us_time() - ctx.start_time) / 1000000
@@ -41,8 +47,6 @@ function ctf_map.place_map(mapmeta, callback)
 		end
 
 		minetest.after(0, minetest.fix_light, mapmeta.pos1, mapmeta.pos2)
-
-		assert(res, "Unable to place schematic, does the MTS file exist? Path: " .. schempath)
 
 		ctf_map.current_map = mapmeta
 

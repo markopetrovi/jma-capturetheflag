@@ -9,23 +9,6 @@ function ctf_map.skybox_exists(subdir)
 	return table.indexof(list, "skybox") ~= -1
 end
 
--- calc_flag_center() calculates the center of a map from the positions of the flags.
-local function calc_flag_center(map)
-	local flag_center = vector.zero()
-	local flag_count = 0
-
-	for _, team in pairs(map.teams) do
-		flag_center = flag_center + team.flag_pos
-		flag_count = flag_count + 1
-	end
-
-	flag_center = flag_center:apply(function(value)
-		return value / flag_count
-	end)
-
-	return flag_center
-end
-
 function ctf_map.load_map_meta(idx, dirname)
 	local meta = Settings(ctf_map.maps_dir .. dirname .. "/map.conf")
 
@@ -159,6 +142,8 @@ function ctf_map.load_map_meta(idx, dirname)
 			barrier_area   = minetest.deserialize(meta:get("barrier_area")),
 			game_modes     = minetest.deserialize(meta:get("game_modes")),
 			enable_shadows = tonumber(meta:get("enable_shadows") or "0.26"),
+			scripted_map_mode = meta:get("scripted_map_mode") == "true",
+			script_name    = meta:get("script_name")
 		}
 
 		-- NOTE --
@@ -200,16 +185,20 @@ function ctf_map.load_map_meta(idx, dirname)
 		-- 	end
 		-- end
 
-		for id, def in pairs(map.chests) do
-			map.chests[id].pos1 = vector.add(offset, def.pos1)
-			map.chests[id].pos2 = vector.add(offset, def.pos2)
+		if map.chests then
+			for id, def in pairs(map.chests) do
+				map.chests[id].pos1 = vector.add(offset, def.pos1)
+				map.chests[id].pos2 = vector.add(offset, def.pos2)
+			end
 		end
 
-		for id, def in pairs(map.teams) do
-			map.teams[id].flag_pos = vector.add(offset, def.flag_pos)
+		if map.teams then
+			for id, def in pairs(map.teams) do
+				map.teams[id].flag_pos = vector.add(offset, def.flag_pos)
 
-			map.teams[id].pos1 = vector.add(offset, def.pos1)
-			map.teams[id].pos2 = vector.add(offset, def.pos2)
+				map.teams[id].pos1 = vector.add(offset, def.pos1)
+				map.teams[id].pos2 = vector.add(offset, def.pos2)
+			end
 		end
 
 		if map.barrier_area then
@@ -218,9 +207,17 @@ function ctf_map.load_map_meta(idx, dirname)
 		else
 			map.barrier_area = {pos1 = map.pos1, pos2 = map.pos2}
 		end
+
+		if map.scripted_map_mode then
+			local script_path = ctf_map.maps_dir .. dirname .. "/" .. map.script_name
+			map.script = dofile(script_path)
+			if map.script.init(map) then
+				minetest.debug("ctf_map: " .. map.name .. " loaded")
+			end
+		end
 	end
 
-	map.flag_center = calc_flag_center(map)
+	map.flag_center = ctf_map.calc_flag_center(map)
 
 	if ctf_map.skybox_exists(ctf_map.maps_dir .. dirname) then
 		skybox.add({dirname, "#ffffff", [5] = "png"})
