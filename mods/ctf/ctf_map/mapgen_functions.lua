@@ -97,14 +97,14 @@ function ctf_map.place_flags(mapmeta, data, area, radius, find_flag_location_cal
 			local attempts = 0
 			local map_center = vector.divide(vector.add(pos1, pos2), 2)
 
+			local tpos1 = vector.copy(def.pos1)
+			local tpos2 = vector.copy(def.pos2)
+			local offset = mapmeta.flag_offset_from_border or 20
+			tpos1 = vector.add(tpos1, offset)
+			tpos2 = vector.subtract(tpos2, offset)
+
 			while not flag_pos_found do
 				attempts = attempts + 1
-
-				local tpos1 = vector.copy(def.pos1)
-				local tpos2 = vector.copy(def.pos2)
-				local offset = mapmeta.flag_offset_from_border or 20
-				tpos1 = vector.add(tpos1, offset)
-				tpos2 = vector.subtract(tpos2, offset)
 
 				-- trying to place the flag farther away from each other
 				local max_dist = 0
@@ -120,7 +120,7 @@ function ctf_map.place_flags(mapmeta, data, area, radius, find_flag_location_cal
 
 				for y = pos1.y, pos2.y do
 					local node_id = data[area:index(p.x, y, p.z)]
-					if node_id and minetest.get_name_from_content_id(node_id) == "air" then
+					if node_id and node_id == c_air then
 
 						new_flag_pos = vector.floor(vector.new(p.x, y, p.z))
 						mapmeta.teams[name].flag_pos = new_flag_pos
@@ -138,7 +138,6 @@ function ctf_map.place_flags(mapmeta, data, area, radius, find_flag_location_cal
 			end
 		end
 
-		local c_indwool = minetest.get_content_id("ctf_map:wool_" .. name)
 		local fpos1 = vector.new(new_flag_pos.x - radius, new_flag_pos.y - 1, new_flag_pos.z - radius)
 		local fpos2 = vector.new(new_flag_pos.x + radius, new_flag_pos.y + 2, new_flag_pos.z + radius)
 
@@ -148,6 +147,8 @@ function ctf_map.place_flags(mapmeta, data, area, radius, find_flag_location_cal
 		end
 
 		if handled == false then
+			local c_indwool = minetest.get_content_id("ctf_map:wool_" .. name)
+
 			-- Clean up the team base area
 			for index in area:iterp(fpos1, fpos2) do
 				data[index] = c_air
@@ -166,4 +167,49 @@ function ctf_map.place_flags(mapmeta, data, area, radius, find_flag_location_cal
 	end
 
 	mapmeta.flag_center = ctf_map.calc_flag_center(mapmeta)
+end
+
+function ctf_map.allocate_chests(mapmeta, data, area, amount, chest_area_size)
+	local c_air = minetest.get_content_id("air")
+	local chest_pos = {}
+	local y1, y2 = mapmeta.pos1.y, mapmeta.pos2.y
+	local chest_area_size = vector.floor(vector.divide(chest_area_size, 2))
+
+	for name, def in pairs(mapmeta.teams) do
+		local tpos1, tpos2 = vector.sort(def.pos1, def.pos2)
+		mapmeta.chests[name] = {}
+
+		local chpos2
+		local chpos1
+
+		local good_pos = false
+		while not good_pos do
+			local random_pos = {x = math.random(tpos1.x, tpos2.x), y = 0, z = math.random(tpos1.z, tpos2.z)}
+
+			local rand_pos1 = vector.subtract(random_pos, chest_area_size)
+			local rand_pos2 = vector.add(random_pos, chest_area_size)
+
+			if vector.in_area(rand_pos1, tpos1, tpos2) and vector.in_area(rand_pos2, tpos1, tpos2) then
+				for y = y1, y2 do
+					local node_id = data[area:index(random_pos.x, y, random_pos.z)]
+					if node_id and node_id == c_air then
+						chpos1 = vector.new(rand_pos1.x, y - chest_area_size.y, rand_pos1.z)
+						chpos2 = vector.new(rand_pos2.x, y + chest_area_size.y, rand_pos2.z)
+						good_pos = true
+						break
+					elseif y == y2 then
+						break
+					end
+				end
+			else
+				minetest.debug("chest area is out of bounds")
+				-- break
+			end
+		end
+
+		mapmeta.chests[name].pos1 = chpos1
+		mapmeta.chests[name].pos2 = chpos2
+		mapmeta.chests[name].amount = amount
+		minetest.debug(name .. ": chests at " .. vector.to_string(chpos1) .. ", " .. vector.to_string(chpos2))
+	end
 end
