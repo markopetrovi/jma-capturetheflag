@@ -13,6 +13,21 @@ minetest.register_craftitem("ctf_ranged:ammo", {
 	inventory_image = "ctf_ranged_ammo.png",
 })
 
+local function is_headshot(player, bullet_pos)
+    local pos = player:get_pos()
+    local collisionbox_player = player:get_properties().collisionbox
+
+    local cbox_min = vector.add({x = collisionbox_player[1], y = collisionbox_player[2] + 1.3, z = collisionbox_player[3]}, pos)
+    local cbox_max = vector.add({x = collisionbox_player[4], y = collisionbox_player[5], z = collisionbox_player[6]}, pos)
+
+	if ctf_core.pos_inside(bullet_pos, cbox_min, cbox_max) then
+        vizlib.draw_point(bullet_pos)
+		minetest.chat_send_all(dump(bullet_pos))
+		return true
+    end
+	return false
+end
+
 local function process_ray(ray, user, look_dir, def)
 	local hitpoint = ray:hit_object_or_node({
 		node = function(ndef)
@@ -77,9 +92,13 @@ local function process_ray(ray, user, look_dir, def)
 				end
 			end
 		elseif hitpoint.type == "object" then
+			local dmg = def.damage
+			if is_headshot(hitpoint.ref, hitpoint.intersection_point) then
+				dmg = 30
+			end
 			hitpoint.ref:punch(user, 1, {
 				full_punch_interval = 1,
-				damage_groups = {ranged = 1, [def.type] = 1, fleshy = def.damage}
+				damage_groups = {ranged = 1, [def.type] = 1, fleshy = dmg}
 			}, look_dir)
 
 			minetest.sound_play("ctf_ranged_hit", {
